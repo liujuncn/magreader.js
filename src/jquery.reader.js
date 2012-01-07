@@ -1,6 +1,7 @@
 /**
  * Boguan jQuery reader plugin file.
- *
+ * 
+ * @algorithm design: Liu Jun <junliu44@gmail.com>
  * @author Chunyou Zhao <snowtigersoft@126.com>
  * @version $Id: jquery.reader.js 2011-12-26 11:11 AM $
  */
@@ -23,6 +24,7 @@ $.extend({
 	      borderW: 10,
 	      borderH: 10,
 	      minArea: 0.6, //区块填充最小程度
+	      usePage: false, //true时，使用page翻页
 	      debug: true,
 	      scale: [[{"dir":0,"scale":0.5}, {"dir":0,"scale":1/3}, {"dir":0,"scale":2/3}],
 	      		  [{"dir":1,"scale":0.5}, {"dir":1,"scale":1/3}, {"dir":1,"scale":2/3}],
@@ -32,8 +34,8 @@ $.extend({
 	    _v_text_elm : null,
 	    _h_text_elm : null,
 	    _data: [],
-	    _prepare_page: 0,
 	    _max_page: 0,
+	    _next_page: 1,
 	    init: function( elm, opts ){
 	    	this._elm = $(elm);
 	    	$.extend(this.settings,opts);
@@ -43,8 +45,8 @@ $.extend({
 	    	this._elm.removeData(this.settings.id);
 	    	this._elm.data(this.settings.id, []);
 	    	this._data = [];
-	    	this._prepare_page = 0;
-	    	this._max_page = 0;
+	    	this._max_page = 9999;
+	    	this._next_page = 1;
 	    	this._elm.empty().width(this.settings.width).height(this.settings.height).addClass("reader-container");
 	    	var offset = this._elm.offset();
 	    	this.settings.cover = $("<div></div>");
@@ -76,13 +78,24 @@ $.extend({
 	    	var cacheData = this._elm.data(this.settings.id);
 	    	if(typeof(cacheData[page]) === 'undefined'){
 	    		//缓存数据条数不够
-	    		if(this._data.length < this.settings.dataFetch){
+	    		if(this._data.length < this.settings.dataFetch && this._max_page >= this._next_page){
+	    			var data = {count:this.settings.dataFetch};
+	    			if(this.settings.usePage){
+	    				data.page = this._next_page;
+	    			}else{
+	    				data.start_id = this._data.length == 0?'':this._data[this._data.length - 1].id;
+	    			}
 			    	$.ajax({
 			    		type: "GET",
 			    		url: this.settings.dataUrl,
-			    		data: {count:this.settings.dataFetch, start_id: (this._data.length == 0?'':$this._data[this._data.length - 1].id)},
+			    		data: data,
 			    		dataType: "json",
 			    		success: function(data){
+			    			if($this.settings.usePage){
+			    				$this._next_page += 1;
+			    				$this._max_page = Math.ceil(data.count/$this.settings.dataFetch); //count为总条数
+			    				data = data.publish;//publish为内容数组
+			    			}
 			    			//loading images
 			    			for(var i in data){
 			    				if(data[i].thumbnail_pic != ''){
@@ -245,21 +258,23 @@ $.extend({
     			var area = {};
     			
     			var outer = $("<div></div>")
-    			outer.addClass("reader-content").width(realW).height(realH);
-    			outer.attr("title","w:"+realW+",h:"+realH+",cell:"+data.cell).attr("sid",data.id);
+    			outer.addClass("reader-content").width(realW).height(realH).attr("sid",data.id);
+    			if($this.settings.debug)
+    				outer.attr("title","w:"+realW+",h:"+realH+",cell:"+data.cell);
     			if(data.thumbnail_pic != ""){
     				area = $this.contentArea(data.thumbnail_pic, data.text, realW, realH);
 	    			
 	    			if(area != false){
 	    				var imgDiv = $("<div></div>");
 		    			imgDiv.addClass("mimg"); //TODO add event
-		    			imgDiv.width(area.img.width).height(area.img.height);
-		    			if(realW == area.text.width){
+		    			imgDiv.width(area.img.width).height(area.img.height).css({"text-align":"center"});
+		    			if(area.img.use == 'w'){
 		    				imgDiv.append("<img src=\""+(area.img.thumbs?data.thumbnail_pic:data.bmiddle_pic)+"\" style=\"width:"+area.img.width+"px\"/>");
 		    			}else{
 		    				imgDiv.append("<img src=\""+(area.img.thumbs?data.thumbnail_pic:data.bmiddle_pic)+"\" style=\"height:"+area.img.height+"px\"/>");
 		    			}
-		    			imgDiv.attr("title","image w:"+area.img.width+",image h:"+area.img.height+"\nttxt w:"+area.text.width+",text h:"+area.text.height+"\ntotal w:"+area.total.width+",total h:"+area.total.height);
+		    			if($this.settings.debug)
+		    				imgDiv.attr("title","Use:"+area.img.use+",aUse:"+area.img.ause+" \nBlock w:"+area.img.width+",Block h:"+area.img.height+"\nimage w:"+area.img.w+",image h:"+area.img.h+"\nttxt w:"+area.text.width+",text h:"+area.text.height+"\ntotal w:"+area.total.width+",total h:"+area.total.height);
 		    			//if(Math.random() > 0.5)
 		    				//imgDiv.css({"float":"right"});
 		    			outer.append(imgDiv);
@@ -273,12 +288,14 @@ $.extend({
 	    	var header = function(){
 	    		var head = $("<div></div>");
 	    		head.addClass("mhead").height($this.settings.minH);
-	    		head.append(
-	    			'<div class="mhead_left"><img width="36" height="36" src="'+data.avatar+'"/></div>'+
-	    			'<div class="mhead_right"><div class="mhead_right_name">'+data.screen_name+(data.thumbnail_pic != '')+
+	    		head.append('<div class="mhead_left"><img width="36" height="36" src="'+data.avatar+'"/></div>');
+	    		var right = $('<div class="mhead_right"></div>');
+	    		right.append(
+	    			'<div class="mhead_right_name">'+data.screen_name+(data.thumbnail_pic != '')+
 	    			'</div><span class="mhead_right_time">'+data.created_at+
-	    			'</span><span class="mhead_right_site"><em class="icon_'+data.site+'"></em></span></div>'
-	    		);
+	    			'</span><span class="mhead_right_site"><em class="icon_'+data.site+'"></em></span>'
+	    		).width(width - 2 * $this.settings.borderW - 44);
+	    		head.append(right);
 	    		//data.screen_name+"("+(data.thumbnail_pic != '')+")"
 	    		
 	    		return head;
@@ -295,10 +312,10 @@ $.extend({
 	    textArea: function(text, width, height){
 	    	if(width > 0){
 	    		this._h_text_elm.html(text).width(width);
-		    	return {width: width, height: this._h_text_elm.height() + this.settings.borderH};
+		    	return {width: width, height: this._h_text_elm.height() + this.settings.borderH * 3};
 	    	}else{
 	    		this._v_text_elm.html(text).height(height);
-	    		return {width: this._v_text_elm.width() + this.settings.borderW, height: height};
+	    		return {width: this._v_text_elm.width() + this.settings.borderW * 3, height: height};
 	    	}
 	    },
 	    contentArea: function(img, text, width, height){
@@ -314,6 +331,7 @@ $.extend({
     		
     		//纵版
     		if(W/H > width/height || W == 0 || area.text.width - this.settings.borderW < 50){
+    			area.img.ause = 'w';
     			if(W == 0){
     				W = 120;
     				H = 90;
@@ -328,35 +346,50 @@ $.extend({
     				return false;
     			
     			//gif 图片不剪裁, 裁剪程度超过3/4的不剪裁
-    			if((mh<ih && img.substring(img.length-4).toLowerCase() == ".gif") || mh/ih < 3/4){
+    			if((mh<ih && img.substring(img.length-4).toLowerCase() == ".gif") || (mh/ih < 3/4 && W/H > 3/4)){
     				var nh = Math.floor(Math.sqrt(area.img.height * area.img.width * H / W));
+    				if(nh > height)
+    					nh = height;
     				var nw = Math.floor(area.img.height * area.img.width / nh);
-    				var inw = W*nh/H;
+    				var inw = H*nh/W;
+    				nw = nw<inw?nw:inw;
+    				if( nw > width * 0.7 - this.settings.borderW){
+    					nw = width;
+    					nh = area.img.height;
+    					area.img.use = 'h'; //图片在上面居中排列
+    				}
+    				area.img.width = nw;
     				area.img.height = nh;
-    				area.img.width = nw<inw?nw:inw;
     			}
     				
     			area.total.height = (area.img.height * area.img.width + area.text.height * area.text.width)/width;
     			area.text.height = height - area.img.height;
     			
-    			if(W < area.img.width)
+    			if(W < area.img.width || H < area.img.height)
     				area.img.thumbs = false;
     		}else{
+    			area.img.ause = 'h';
     			var ih = (W<120 && H<120)?H:height;
     			area.img.height = ih;
     			var iw = Math.floor((ih/H) * W);
+    			if(iw < 60){
+    				iw = Math.floor(width * 0.45);
+    				area.img.use = 'w';
+    			}
     			var mw = width - area.text.width;
     			area.img.width = iw<mw?iw:mw;
-    			if(area.img.width<60  || (area.img.width < 90 && mw < iw))
+    			if(area.img.width<60  || (area.img.width < 90 && mw < ((ih/H) * W)))
     				return false;
     			
     			//gif 图片不剪裁, 裁剪程度超过3/4的不剪裁
-    			if((mw<iw && img.substring(img.length-4).toLowerCase() == ".gif") || mw/iw < 3/4){
+    			if((mw<((ih/H) * W) && img.substring(img.length-4).toLowerCase() == ".gif") || mw/((ih/H) * W) < 3/4){
     				var nw = Math.floor(Math.sqrt(area.img.height * area.img.width * W / H));
+    				if(nw > width)
+    					nw = width;
     				var nh = Math.floor(area.img.height * area.img.width / nw);
     				var inh = H*nw/W;
-    				if(width - nw - this.settings.borderW < 50){
-    					nw = width - this.settings.borderW - 50;
+    				if( nw > width * 0.7 - this.settings.borderW){
+    					nw = width;
     					nh = Math.floor(area.img.height * area.img.width / nw);
     					inh = H*nw/W;
     				}
@@ -367,9 +400,19 @@ $.extend({
     			area.total.width = (area.img.height * area.img.width + area.text.height * area.text.width)/height;
     			area.text.width = width - area.img.width;
     			
-    			if(H < area.img.height)
+    			if(H < area.img.height || W < area.img.width)
     				area.img.thumbs = false;
     		}
+    		
+    		if(typeof(area.img.use) == 'undefined'){
+	    		if((W == 120 && H == 90) ||area.img.width/area.img.height > W/H){
+	    			area.img.use = 'w';
+	    		}else{
+	    			area.img.use = 'h';
+	    		}
+    		}
+    		area.img.w = W;
+    		area.img.h = H;
     		
     		return area;
 	    },
