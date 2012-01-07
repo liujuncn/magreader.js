@@ -11,18 +11,17 @@ $.extend({
 	reader : {
 	    settings : {
 	      id: 'reader',
-	      width: 910,
-	      height: 520,
+	      width: 910, //阅读界面宽度
+	      height: 520, //阅读界面高度
 	      dataUrl: '', //fetch data url
-	      dataFetch: 20,
-	      adUrl: '', //fetch ad url
-	      hardAdFrequency: 3,//平均3次出一次
-	      softAdFrequency: 3,//平均3次出一次
-	      cover: '',
-	      minW: 225,
-	      minH: 40,
-	      borderW: 10,
-	      borderH: 10,
+	      dataFetch: 20, //每次提起记录条数
+	      dataCacheSize: 10,//默认为10
+	      adUrl: '', //fetch ad url,not use
+	      cover: '', //loading
+	      minW: 225,//最小区块宽度
+	      minH: 40,//最小区块高度
+	      borderW: 10,//左右边距
+	      borderH: 10,//上下边距
 	      minArea: 0.6, //区块填充最小程度
 	      usePage: false, //true时，使用page翻页
 	      debug: true,
@@ -78,7 +77,7 @@ $.extend({
 	    	var cacheData = this._elm.data(this.settings.id);
 	    	if(typeof(cacheData[page]) === 'undefined'){
 	    		//缓存数据条数不够
-	    		if(this._data.length < this.settings.dataFetch && this._max_page >= this._next_page){
+	    		if(this._data.length < this.settings.dataCacheSize && this._max_page >= this._next_page){
 	    			var data = {count:this.settings.dataFetch};
 	    			if(this.settings.usePage){
 	    				data.page = this._next_page;
@@ -109,12 +108,12 @@ $.extend({
 			    			$this._elm.data($this.settings.id, cacheData);
 			    			$this.showContent(content);
 			    			if(callback)
-								callback.apply({has_next:$this._data.length > 0, success:true});
+								callback.apply($this._elm, [{has_next:($this._data.length > 0 || $this._max_page >= $this._next_page), success:true}]);
 			    		},
 			    		error: function(xhr, textStatus, errorThrown){
 			    			$.reader.loading(false);
 			    			if(callback)
-								callback.apply({success:false});
+								callback.apply($this._elm, [{success:false}]);
 			    		}
 			    	});
 		    	}else{
@@ -123,13 +122,13 @@ $.extend({
 			    	this._elm.data(this.settings.id, cacheData);
 			    	this.showContent(content);
 			    	if(callback)
-						callback.apply({has_next:this._data.length > 0, success:true});
+						callback.apply(this._elm, [{has_next:(this._data.length > 0 || this._max_page >= this._next_page), success:true}]);
 		    	}
 	    	}else{
 	    		var content = cacheData[page];
 	    		this.showContent(content);
 	    		if(callback)
-					callback.apply({has_next:(this._data.length > 0 || page<_max_page), success:true});
+					callback.apply(this._elm, [{has_next:true, success:true}]);
 	    	}
 	    },
 	    loading: function(show){
@@ -347,6 +346,7 @@ $.extend({
     			
     			//gif 图片不剪裁, 裁剪程度超过3/4的不剪裁
     			if((mh<ih && img.substring(img.length-4).toLowerCase() == ".gif") || (mh/ih < 3/4 && W/H > 3/4)){
+    				area.img.height -= 22;//图片高度减去一行文字，为了避免文字溢出
     				var nh = Math.floor(Math.sqrt(area.img.height * area.img.width * H / W));
     				if(nh > height)
     					nh = height;
@@ -383,6 +383,7 @@ $.extend({
     			
     			//gif 图片不剪裁, 裁剪程度超过3/4的不剪裁
     			if((mw<((ih/H) * W) && img.substring(img.length-4).toLowerCase() == ".gif") || mw/((ih/H) * W) < 3/4){
+    				area.img.width -= 22;//图片宽度减去一行文字，为了避免文字溢出
     				var nw = Math.floor(Math.sqrt(area.img.height * area.img.width * W / H));
     				if(nw > width)
     					nw = width;
@@ -436,7 +437,7 @@ $.extend({
 			}
 	    },
 	    clip: function(width, height, level, data){
-	    	if(this.settings.scale.length <= level){
+	    	if(this.settings.scale.length <= level || this._data.length == 0){
 	    		return {isCell:true,width: width, height: height, data:data};
 	    	}
 	    	if(this._data.length == 1 && typeof(data) == 'undefined'){
