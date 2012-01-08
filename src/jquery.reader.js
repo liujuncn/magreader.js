@@ -48,16 +48,11 @@ $.extend({
 	    	this._next_page = 1;
 	    	this._elm.empty().width(this.settings.width).height(this.settings.height).addClass("reader-container");
 	    	var offset = this._elm.offset();
-	    	this.settings.cover = $("<div></div>");
-	    	this.settings.cover.width(942)
-	    		.height(522)
+	    	this.settings.cover = $('<div>米读加载中......</div>');
+	    	this.settings.cover
 	    		.addClass("reader-loading-overlay")
-	    		.css({'left':0, 'top':0})
 	    		.insertAfter(this._elm)
 	    		.hide();
-	    		if($.browser.msie && $.browser.version == 6.0 ){
-	    			this.settings.cover.css("left",-912);
-	    		}
 	    	this._v_text_elm = $("<div></div>");
 	    	this._v_text_elm.addClass("reader-text-calc").addClass("reader-text-calc-v").hide().appendTo($("body"));
 	    	this._h_text_elm = $("<div></div>");
@@ -101,6 +96,7 @@ $.extend({
 			    					var myImg=new Image();
 	    							myImg.setAttribute("src",data[i].thumbnail_pic);
 			    				}
+			    				data[i].text = "&nbsp;&nbsp;&nbsp;&nbsp;" + data[i].text;
 			    			}
 			    			$.merge($this._data, data);
 			    			var content = $this.dealWithData();
@@ -128,7 +124,7 @@ $.extend({
 	    		var content = cacheData[page];
 	    		this.showContent(content);
 	    		if(callback)
-					callback.apply(this._elm, [{has_next:true, success:true}]);
+					callback.apply(this._elm, [{has_next:!((cacheData.length == page+1) && this._data.length == 0), success:true}]);
 	    	}
 	    },
 	    loading: function(show){
@@ -290,7 +286,7 @@ $.extend({
 	    		head.append('<div class="mhead_left"><img width="36" height="36" src="'+data.avatar+'"/></div>');
 	    		var right = $('<div class="mhead_right"></div>');
 	    		right.append(
-	    			'<div class="mhead_right_name">'+data.screen_name+(data.thumbnail_pic != '')+
+	    			'<div class="mhead_right_name" value="'+(data.thumbnail_pic != '')+'">'+data.screen_name+
 	    			'</div><span class="mhead_right_time">'+data.created_at+
 	    			'</span><span class="mhead_right_site"><em class="icon_'+data.site+'"></em></span>'
 	    		).width(width - 2 * $this.settings.borderW - 44);
